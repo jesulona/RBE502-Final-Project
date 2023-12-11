@@ -60,7 +60,7 @@ n_sym = [n1; n2; n3];
 dz_sym = quadrotor(0, z_sym, u_sym, p_sym, r_sym, n_sym);
 
 % Compute the Jacobians
-A_sym = jacobian(dz_sym, z_sym)
+A_sym = jacobian(dz_sym, z_sym);
 %B_sym = jacobian(dz_sym, u_sym)
 
 % Assume each control input ui contributes to the total thrust and torques
@@ -92,7 +92,7 @@ B_sym(12, 4) = -sigma/I(3); % Yaw torque due to u4
 
 
 % Substitute in the hover condition and parameter values
-A_hover = subs(A_sym, [z_sym; u_sym; p_sym; r_sym; n_sym], [x0; u0; p'; r; n])
+A_hover = subs(A_sym, [z_sym; u_sym; p_sym; r_sym; n_sym], [x0; u0; p'; r; n]);
 B_hover = subs(B_sym, [sigma, m, l, I(1), I(2), I(3)], [0.01, 0.5, 0.2, 1.24, 1.24, 2.48]);
 
 %B_hover = subs(B_sym, [sigma; m], [0.01;0.5])
@@ -134,7 +134,6 @@ R = control_input_weight * eye(4); % Assuming 4 control inputs
 % Implement LQR controller
 K = lqr(A_hover_numeric, B_hover_numeric, Q, R);
 
-% Now you can use K in your control loop
 
 %Q = eye(12); % State cost
 %R = eye(4);  % Input cost
@@ -156,11 +155,11 @@ change_direction_interval = 100; % Change direction every 50 iterations
 for k = 1:length(t)-1
     % Define desired state (example: hover at a height of 5 meters)
     position = intruder_pos;
-    hover = [0; 0; 5]
-    z_desired = [position; zeros(9,1)]; % [position; orientation; linear velocity; angular velocity]
+    hover = [0; 0; 10];
+    z_desired = [hover; zeros(9,1)]; % [position; orientation; linear velocity; angular velocity]
 
      % Calculate error between current state and desired state
-    error = quadrotor_state - z_desired
+    error = quadrotor_state - z_desired;
 
     % Calculate control input using LQR (u = -K*error)
     u = -K * error;
@@ -227,7 +226,7 @@ title(ax(4), '\boldmath$\omega$','Interpreter','LaTeX','FontSize',14);
 %% Animation
 animation_fig = figure;
 
-airspace_box_length = 40;
+airspace_box_length = 20;
 
 animation_axes = axes('Parent', animation_fig,...
     'NextPlot','add','DataAspectRatio',[1 1 1],...
@@ -247,7 +246,7 @@ N = 10;
 Q = linspace(0,2*pi,N)';
 circle = 0.3*l*[cos(Q) sin(Q) zeros(N,1)];
 circle = subs(circle, l, 0.2);
-l = double(0.2)
+l = double(0.2);
 loc = l*[1 0 0; 0 1 0; -1 0 0; 0 -1 0];
 
 % Convert loc and circle to numeric arrays if they are symbolic
