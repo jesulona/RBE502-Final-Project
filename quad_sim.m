@@ -33,10 +33,10 @@ x0 = [0; 0; 0; % Position (assuming hover at origin)
       0; 0; 0; % Orientation (level)
       0; 0; 0; % Linear velocity (hover - no velocity)
       0; 0; 0];% Angular velocity (hover - no rotation)
-u0 = [m*g; % Thrust to counteract gravity
-      0;   % No rotational thrust
-      0;
-      0];
+u0 = [0.25*m*g; % Thrust to counteract gravity
+      0.25*m*g;   % No rotational thrust
+      0.25*m*g;
+      0.25*m*g];
 
 % This is a conceptual representation
 %[A, B] = linmod('quadrotor', x0, u0);
@@ -160,6 +160,8 @@ for k = 1:length(t)-1
 
      % Calculate error between current state and desired state
     error = quadrotor_state - z_desired;
+    
+    K = lqr(A_hover_numeric, B_hover_numeric, Q, R);
 
     % Calculate control input using LQR (u = -K*error)
     u = -K * error;
@@ -179,7 +181,10 @@ for k = 1:length(t)-1
    % Update the state for the next iteration
     quadrotor_state = quadrotor_state_next;
 
-    path = [path;quadrotor_state'];
+%     A_hover = subs(A_sym, [z_sym; u_sym; p_sym; r_sym; n_sym], [quadrotor_state; u; p'; r; n]);
+%     A_hover_numeric = double(A_hover);
+
+    path = [path; quadrotor_state'];
 
      % Change the direction of the intruder every fixed number of iterations
     if mod(k, change_direction_interval) == 0
