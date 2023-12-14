@@ -18,12 +18,12 @@ r = [0; 0; 0];
 n = [0; 0; 0];
 
 % Control inputs (constant for now, but can be changed later)
-u = [1; 0.9; 1.9; 1.5];
+%u = [1; 0.9; 1.9; 1.5];
 
 % Intruder initialization
-intruder_pos = [0; 0; 5]; % Initial position of the intruder
+intruder_pos = [3; -7; 5]; % Initial position of the intruder
 intruder_start = intruder_pos;
-intruder_speed = 3; % Adjust this value for the intruder's speed
+intruder_speed = 2; % Adjust this value for the intruder's speed
 
 % Time vector
 t = linspace(0, 10, 1000);
@@ -62,33 +62,43 @@ dz_sym = quadrotor(0, z_sym, u_sym, p_sym, r_sym, n_sym);
 % Compute the Jacobians
 A_sym = jacobian(dz_sym, z_sym);
 %B_sym = jacobian(dz_sym, u_sym)
+% 
+% % Assume each control input ui contributes to the total thrust and torques
+% % Total thrust (collective thrust from all rotors)
+% B_sym(9, 1) = 1/m;   % Thrust from u1 affects z acceleration
+% B_sym(9, 2) = 1/m;   % Thrust from u2
+% B_sym(9, 3) = 1/m;   % Thrust from u3
+% B_sym(9, 4) = 1/m;   % Thrust from u4
+% 
+% % Torques due to differential thrusts
+% % Roll torque (depends on differential thrust between rotors 1 & 3 and 2 & 4)
+% B_sym(10, 1) =  l/I(1); % Roll torque due to u1
+% B_sym(10, 3) = -l/I(1); % Roll torque due to u3
+% 
+% % Pitch torque (depends on differential thrust between rotors 1 & 4 and 2 & 3)
+% B_sym(11, 2) =  l/I(2); % Pitch torque due to u2
+% B_sym(11, 4) = -l/I(2); % Pitch torque due to u4
+% 
+% % Yaw torque (depends on torque induced by each rotor)
+% % Assuming a proportionality factor 'sigma' relating thrust to torque
+% B_sym(12, 1) =  sigma/I(3); % Yaw torque due to u1
+% B_sym(12, 2) = -sigma/I(3); % Yaw torque due to u2
+% B_sym(12, 3) =  sigma/I(3); % Yaw torque due to u3
+% B_sym(12, 4) = -sigma/I(3); % Yaw torque due to u4
+% 
+% 
+% %Print1 = [z_sym; u_sym; p_sym;r_sym;n_sym] 
+% %print2 = [x0;u0;p';r;n]
+% 
+B_sym = zeros(12,4);
 
-% Assume each control input ui contributes to the total thrust and torques
-% Total thrust (collective thrust from all rotors)
-B_sym(9, 1) = 1/m;   % Thrust from u1 affects z acceleration
-B_sym(9, 2) = 1/m;   % Thrust from u2
-B_sym(9, 3) = 1/m;   % Thrust from u3
-B_sym(9, 4) = 1/m;   % Thrust from u4
+% Thrust Contribution
+B_sym(9, :) = 1/p(3); % Assuming p(3) is the mass m
 
-% Torques due to differential thrusts
-% Roll torque (depends on differential thrust between rotors 1 & 3 and 2 & 4)
-B_sym(10, 1) =  l/I(1); % Roll torque due to u1
-B_sym(10, 3) = -l/I(1); % Roll torque due to u3
-
-% Pitch torque (depends on differential thrust between rotors 1 & 4 and 2 & 3)
-B_sym(11, 2) =  l/I(2); % Pitch torque due to u2
-B_sym(11, 4) = -l/I(2); % Pitch torque due to u4
-
-% Yaw torque (depends on torque induced by each rotor)
-% Assuming a proportionality factor 'sigma' relating thrust to torque
-B_sym(12, 1) =  sigma/I(3); % Yaw torque due to u1
-B_sym(12, 2) = -sigma/I(3); % Yaw torque due to u2
-B_sym(12, 3) =  sigma/I(3); % Yaw torque due to u3
-B_sym(12, 4) = -sigma/I(3); % Yaw torque due to u4
-
-
-%Print1 = [z_sym; u_sym; p_sym;r_sym;n_sym] 
-%print2 = [x0;u0;p';r;n]
+% Torques Contribution
+B_sym(10, :) = [ 0,       p(2)/I(1),  0,         -p(2)/I(1)]; % Roll torque
+B_sym(11, :) = [-p(2)/I(2),  0,       p(2)/I(2),  0];         % Pitch torque
+B_sym(12, :) = [ p(8)/I(3), -p(8)/I(3), p(8)/I(3), -p(8)/I(3)]; % Yaw torque
 
 
 % Substitute in the hover condition and parameter values
@@ -114,13 +124,13 @@ B_hover_numeric = double(B_hover);
 % Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
 % You can adjust these weights to tune the controller
-position_weight = 10;
-velocity_weight = 1;
-orientation_weight = 1;
-angular_velocity_weight = 1;
+position_weight = 70;
+velocity_weight = 10;
+orientation_weight = 50;
+angular_velocity_weight = 20;
 
 % Define weights for control inputs
-control_input_weight = 5; % You can adjust this to tune the input cost
+control_input_weight = 20; % You can adjust this to tune the input cost
 
 % Define the state cost matrix Q
 Q = diag([position_weight * ones(1,3), ...      % Position weights (x, y, z)
@@ -149,16 +159,34 @@ path = [z0'];
 intruder_path = [intruder_pos'];
 dt = t(2) - t(1); % Time step based on the time vector
 
-intruder_direction = [1; 1; 0]; % Initial direction for the intruder
-change_direction_interval = 100; % Change direction every 50 iterations
+intruder_direction = [-1; 1; 0]; % Initial direction for the intruder
+change_direction_interval = 500; % Change direction every 50 iterations
+
+% Define a flag to track if a hit has occurred
+hit_flag = false;
+
+% Define the radius of the circle for hit detection
+hit_radius = 5.0; % Assuming the circle radius is 0.3*l
+
 
 for k = 1:length(t)-1
-    % Define desired state (example: hover at a height of 5 meters)
-    position = intruder_pos;
-    hover = [0; 0; 10];
-    z_desired = [hover; zeros(9,1)]; % [position; orientation; linear velocity; angular velocity]
-
-     % Calculate error between current state and desired state
+    % Check for hit if it hasn't occurred yet
+    if ~hit_flag
+        distance_to_intruder = norm(quadrotor_state(1:3) - intruder_pos);
+        if distance_to_intruder <= hit_radius
+            hit_flag = true; % Set flag to true
+            % Change intruder plot color to green
+            %set(intruder_plot, 'MarkerFaceColor', 'g');
+            % Stop the intruder's movement
+            intruder_speed = 0;
+            % Change desired position to home
+            z_desired = [0; 0; 0; zeros(9,1)];
+        else
+            % Define desired state based on intruder position
+            z_desired = [intruder_pos; zeros(9,1)];
+        end
+    end
+    % Calculate error between current state and desired state
     error = quadrotor_state - z_desired;
 
     % Calculate control input using LQR (u = -K*error)
