@@ -23,7 +23,7 @@ n = [0; 0; 0];
 % Intruder initialization
 intruder_pos = [3; -7; 5]; % Initial position of the intruder
 intruder_start = intruder_pos;
-intruder_speed = 2; % Adjust this value for the intruder's speed
+intruder_speed = 0.1; % Adjust this value for the intruder's speed
 
 % Time vector
 t = linspace(0, 10, 1000);
@@ -33,10 +33,11 @@ x0 = [0; 0; 0; % Position (assuming hover at origin)
       0; 0; 0; % Orientation (level)
       0; 0; 0; % Linear velocity (hover - no velocity)
       0; 0; 0];% Angular velocity (hover - no rotation)
-u0 = [m*g; % Thrust to counteract gravity
-      0;   % No rotational thrust
-      0;
-      0];
+% u0 = [m*g; % Thrust to counteract gravity
+%       0;   % No rotational thrust
+%       0;
+%       0];
+u0 = [1 1 1 1]'*m*g/4;
 
 % This is a conceptual representation
 %[A, B] = linmod('quadrotor', x0, u0);
@@ -124,13 +125,13 @@ B_hover_numeric = double(B_hover);
 % Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
 % You can adjust these weights to tune the controller
-position_weight = 70;
+position_weight = 15;
 velocity_weight = 10;
-orientation_weight = 50;
-angular_velocity_weight = 20;
+orientation_weight = 5;
+angular_velocity_weight = 1;
 
 % Define weights for control inputs
-control_input_weight = 20; % You can adjust this to tune the input cost
+control_input_weight = 6; % You can adjust this to tune the input cost
 
 % Define the state cost matrix Q
 Q = diag([position_weight * ones(1,3), ...      % Position weights (x, y, z)
@@ -166,14 +167,14 @@ change_direction_interval = 500; % Change direction every 50 iterations
 hit_flag = false;
 
 % Define the radius of the circle for hit detection
-hit_radius = 5.0; % Assuming the circle radius is 0.3*l
-
+hit_radius = 2.0; % Assuming the circle radius is 0.3*l
 
 for k = 1:length(t)-1
-    % Check for hit if it hasn't occurred yet
+    % Retrieve
     if ~hit_flag
         distance_to_intruder = norm(quadrotor_state(1:3) - intruder_pos);
         if distance_to_intruder <= hit_radius
+            disp("hit")
             hit_flag = true; % Set flag to true
             % Change intruder plot color to green
             %set(intruder_plot, 'MarkerFaceColor', 'g');
@@ -181,11 +182,19 @@ for k = 1:length(t)-1
             intruder_speed = 0;
             % Change desired position to home
             z_desired = [0; 0; 0; zeros(9,1)];
+        
         else
-            % Define desired state based on intruder position
             z_desired = [intruder_pos; zeros(9,1)];
+            %z_desired = [[-10;0;10]; zeros(9,1)];
         end
+
+    % Return
+    else
+        disp("else hit")
+        intruder_pos = quadrotor_state(1:3);
+        % Define desired state based on intruder position
     end
+
     % Calculate error between current state and desired state
     error = quadrotor_state - z_desired;
 
