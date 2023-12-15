@@ -23,20 +23,33 @@ u = [1; 0.9; 1.9; 1.5];
 % Intruder initialization
 intruder_pos = [0; 0; 5]; % Initial position of the intruder
 intruder_start = intruder_pos;
+<<<<<<< Updated upstream
 intruder_speed = 3; % Adjust this value for the intruder's speed
+=======
+intruder_speed = 1.5; % Adjust this value for the intruder's speed
+>>>>>>> Stashed changes
 
 % Time vector
-t = linspace(0, 10, 1000);
+t = linspace(0, 10, 2000);
 
 %% Linearization 
 x0 = [0; 0; 0; % Position (assuming hover at origin)
       0; 0; 0; % Orientation (level)
       0; 0; 0; % Linear velocity (hover - no velocity)
       0; 0; 0];% Angular velocity (hover - no rotation)
+<<<<<<< Updated upstream
 u0 = [m*g; % Thrust to counteract gravity
       0;   % No rotational thrust
       0;
       0];
+=======
+
+% u0 = [m*g; % Thrust to counteract gravity
+%       0;   % No rotational thrust
+%       0;
+%       0];
+u0 = [1 1 1 1]'*m*g/4;
+>>>>>>> Stashed changes
 
 % This is a conceptual representation
 %[A, B] = linmod('quadrotor', x0, u0);
@@ -114,6 +127,7 @@ B_hover_numeric = double(B_hover);
 % Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
 % You can adjust these weights to tune the controller
+<<<<<<< Updated upstream
 position_weight = 10;
 velocity_weight = 1;
 orientation_weight = 1;
@@ -121,12 +135,27 @@ angular_velocity_weight = 1;
 
 % Define weights for control inputs
 control_input_weight = 5; % You can adjust this to tune the input cost
+=======
+% position_weight = 22;
+% velocity_weight = 15;
+% orientation_weight = 1;
+% angular_velocity_weight = 1;
+
+position_weight = [5,5,2];
+orientation_weight = [1,1,1]; 
+velocity_weight = [1,1,1];
+angular_velocity_weight = [2,2,1];
+
+
+% Define weights for control inputs
+control_input_weight = 1; % You can adjust this to tune the input cost
+>>>>>>> Stashed changes
 
 % Define the state cost matrix Q
-Q = diag([position_weight * ones(1,3), ...      % Position weights (x, y, z)
-          velocity_weight * ones(1,3), ...      % Velocity weights (xdot, ydot, zdot)
-          orientation_weight * ones(1,3), ...   % Orientation weights (phi, theta, psi)
-          angular_velocity_weight * ones(1,3)]); % Angular velocity weights (phidot, thetadot, psidot)
+Q = diag([position_weight, ...      % Position weights (x, y, z)
+          orientation_weight, ...   % Orientation weights (phi, theta, psi) 
+          velocity_weight, ...      % Velocity weights (xdot, ydot, zdot)
+          angular_velocity_weight]);% Angular velocity weights (phidot, thetadot, psidot)
 
 % Define the control input cost matrix R
 R = control_input_weight * eye(4); % Assuming 4 control inputs
@@ -149,6 +178,7 @@ path = [z0'];
 intruder_path = [intruder_pos'];
 dt = t(2) - t(1); % Time step based on the time vector
 
+<<<<<<< Updated upstream
 intruder_direction = [1; 1; 0]; % Initial direction for the intruder
 change_direction_interval = 100; % Change direction every 50 iterations
 
@@ -165,19 +195,87 @@ for k = 1:length(t)-1
     u = -K * error;
     
     % Ensure quadrotor_state is a column vector
+=======
+intruder_direction = [-1; 1; 0]; % Initial direction for the intruder
+change_direction_interval = 400; % Change direction every 50 iterations
+
+% Define a flag to track if a hit has occurred
+hit_flag = false;
+
+% Define the radius of the circle for hit detection
+hit_radius = 0.1; % Assuming the circle radius is 0.3*l
+
+integral = zeros(12,1);
+ki = zeros(4,12);
+% ki(1:4, 1:3) = zeros(4,3) + 0.007;
+
+ki(1:4, 3) = [0.006;0.006;0.006;0.006];
+
+
+for k = 1:length(t)-1
+
+    % Control Intruder Direction
+    if mod(k, change_direction_interval) == 0
+        intruder_direction = [2*rand(2, 1) - 1; 0]; % Change in X and Y, not Z
+        intruder_direction = intruder_direction / norm(intruder_direction); % Normalize direction
+    end
+
+    % Control Intruder Position
+    intruder_pos = intruder_pos + intruder_direction * intruder_speed * dt;
+    intruder_pos = max(min(intruder_pos, 10), -10); % Keep within bounds
+
+    intruder_path = [intruder_path; intruder_pos'];
+
+
+
+
+    % Phase 2
+    if ~hit_flag
+        distance_to_intruder = norm(quadrotor_state(1:3) - intruder_pos)
+        if distance_to_intruder <= hit_radius
+            disp("hit")
+            hit_flag = true; % Set flag to true
+            % Change intruder plot color to green
+            %set(intruder_plot, 'MarkerFaceColor', 'g');
+            % Stop the intruder's movement
+            intruder_speed = 0;
+            % Change desired position to home
+            z_desired = [0; 0; 0; zeros(9,1)];
+        
+        else
+            z_desired = [intruder_pos; zeros(3,1); zeros(3,1); zeros(3,1)]; %intruder_direction * intruder_speed;
+            %z_desired = [[7.5;7.5;2.5]; zeros(9,1)];
+        end
+
+    % Phase 1
+    else
+        disp("else hit")
+        intruder_pos = quadrotor_state(1:3);
+        % Define desired state based on intruder position
+    end
+
+    % Error State
+    error = quadrotor_state - z_desired;
+
+    % Control input
+    u = -K * error; % + -ki * integral;
+    
+    % Integral control
+    integral = integral + error;
+
+    % Update Quadrotor
+>>>>>>> Stashed changes
     current_state = quadrotor_state;
-
-
-    % Directly call quadrotor function to get the derivative
     dz = quadrotor(t(k), current_state, u, p, r, n);
-
     change = dz*dt;
 
     % Explicit Euler method to update the state
     quadrotor_state_next = current_state + change;
 
    % Update the state for the next iteration
+    % Update the state for the next iteration
     quadrotor_state = quadrotor_state_next;
+<<<<<<< Updated upstream
 
     path = [path;quadrotor_state'];
 
@@ -195,6 +293,9 @@ for k = 1:length(t)-1
 
     % Pause for real-time visualization
     %pause(0.01);
+=======
+    path = [path; quadrotor_state'];
+>>>>>>> Stashed changes
 end
 
 %% Plotting the results
