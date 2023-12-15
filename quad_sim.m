@@ -23,7 +23,7 @@ n = [0; 0; 0];
 % Intruder initialization
 intruder_pos = [3; -7; 5]; % Initial position of the intruder
 intruder_start = intruder_pos;
-intruder_speed = 0.5; % Adjust this value for the intruder's speed
+intruder_speed = 0.1; % Adjust this value for the intruder's speed
 
 % Time vector
 t = linspace(0, 10, 1000);
@@ -105,7 +105,7 @@ B_hover_numeric = double(B_hover);
 % angular_velocity_weight = 1;
 
 % Define weights for different state variables
-position_weight = [5,5,5];
+position_weight = [5,5,15];
 orientation_weight = [1000,1000,1];
 velocity_weight = [10,10,10];
 angular_velocity_weight = [100,100,1];
@@ -147,13 +147,16 @@ change_direction_interval = 500; % Change direction every 50 iterations
 hit_flag = false;
 
 % Define the radius of the circle for hit detection
-hit_radius = 0.1; % Assuming the circle radius is 0.3*l
+hit_radius = 0.3; % Assuming the circle radius is 0.3*l
 
 integral = zeros(12,1);
 ki = zeros(4,12);
 % ki(1:4, 1:3) = zeros(4,3) + 0.007;
+%ki_v = 0.006;
+ki_v = 0.008;
 
-ki(1:4, 3) = [0.006;0.006;0.006;0.006]
+
+ki(1:4, 3) = [ki_v;ki_v;ki_v;ki_v]
 
 
 for k = 1:length(t)-1
