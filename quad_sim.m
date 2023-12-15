@@ -73,14 +73,9 @@ B_sym(10, :) = [ 0,       p(2)/I(1),  0,         -p(2)/I(1)]; % Roll torque
 B_sym(11, :) = [-p(2)/I(2),  0,       p(2)/I(2),  0];         % Pitch torque
 B_sym(12, :) = [ p(8)/I(3), -p(8)/I(3), p(8)/I(3), -p(8)/I(3)]; % Yaw torque
 
-
 % Substitute in the hover condition and parameter values
 A_hover = subs(A_sym, [z_sym; u_sym; p_sym; r_sym; n_sym], [x0; u0; p'; r; n]);
 B_hover = subs(B_sym, [sigma, m, l, I(1), I(2), I(3)], [0.01, 0.5, 0.2, 1.24, 1.24, 2.48]);
-
-%B_hover = subs(B_sym, [sigma; m], [0.01;0.5])
-
-
 
 % Debug: Check if substitution is successful and complete
 disp('Substituted A matrix:');
@@ -92,7 +87,6 @@ disp(B_hover);
 % Convert to numeric matrices
 A_hover_numeric = double(A_hover);
 B_hover_numeric = double(B_hover);
-
 
 % Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
@@ -117,32 +111,6 @@ R = control_input_weight * eye(4); % Assuming 4 control inputs
 % Implement LQR controller
 K = lqr(A_hover_numeric, B_hover_numeric, Q, R);
 
-
-%Q = eye(12); % State cost
-%R = eye(4);  % Input cost
-%K = lqr(A_hover_numeric, B_hover_numeric, Q, R); % LQR gain
-% Assuming A_hover and B_hover are your original matrices
-% Augment A and B for the integral action
-
-A_augmented = [A_hover, zeros(12, 3); 
-               % Integral error dynamics
-               eye(3), zeros(3, 3)];  
-
-B_augmented = [B_hover; 
-               zeros(3, size(B_hover, 2))];
-
-% Choose weights for integral error
-integral_error_weight = 10; % Choose a suitable value
-
-% Augment Q matrix
-Q_augmented = blkdiag(Q, integral_error_weight * eye(3));
-
-% LQRI gain calculation
-K_augmented = lqr(A_augmented, B_augmented, Q_augmented, R);
-
-
-
-
 %% Main Simulation Loop
 global quadrotor_state
 global quadrotor_state_next
@@ -159,6 +127,22 @@ hit_flag = false;
 
 % Define the radius of the circle for hit detection
 hit_radius = 3; % Assuming the circle radius is 0.3*l
+
+integral_error = zeros(3,1);  % x, y, z position errors
+
+% Define the state cost matrix for the integral error
+integral_error_weight = 10;  % Adjust this value based on your requirements
+
+% Augment Q matrix
+Q_augmented = blkdiag(Q, integral_error_weight * eye(3));
+
+% Augmented A and B matrices
+A_augmented = [A_hover_numeric, zeros(12, 3); zeros(3, 12), zeros(3, 3)];
+B_augmented = [B_hover_numeric; zeros(3, 4)];
+
+% Compute augmented LQR gain
+K_augmented = lqr(A_augmented, B_augmented, Q_augmented, R);
+
 
 for k = 1:length(t)-1
     % Retrieve
