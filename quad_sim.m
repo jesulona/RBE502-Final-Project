@@ -23,7 +23,7 @@ u = [1; 0.9; 1.9; 1.5];
 % Intruder initialization
 intruder_pos = [0; 0; 5]; % Initial position of the intruder
 intruder_start = intruder_pos;
-intruder_speed = 3; % Adjust this value for the intruder's speed
+intruder_speed = 1; % Adjust this value for the intruder's speed
 
 % Time vector
 t = linspace(0, 10, 1000);
@@ -113,7 +113,7 @@ angular_velocity_weight = [100,100,1];
 Ki = 1;
 
 % Define weights for control inputs
-control_input_weight = 1; % You can adjust this to tune the input cost
+control_input_weight = 0.1; % You can adjust this to tune the input cost
 
 % Define the state cost matrix Q
 Q = diag([position_weight,...        % Position weights (x, y, z)
@@ -147,7 +147,7 @@ for k = 1:length(t)-1
     % Define desired state (example: hover at a height of 5 meters)
     position = intruder_pos;
     hover = [7.5; 7.5; 10];
-    z_desired = [hover; zeros(9,1)]; % [position; orientation; linear velocity; angular velocity]
+    z_desired = [position; zeros(9,1)]; % [position; orientation; linear velocity; angular velocity]
 
      % Calculate error between current state and desired state
     error = quadrotor_state - z_desired;
