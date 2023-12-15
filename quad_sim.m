@@ -72,12 +72,12 @@ B_sym(9, 4) = 1/m;   % Thrust from u4
 
 % Torques due to differential thrusts
 % Roll torque (depends on differential thrust between rotors 1 & 3 and 2 & 4)
-B_sym(10, 1) =  l/I(1); % Roll torque due to u1
-B_sym(10, 3) = -l/I(1); % Roll torque due to u3
+B_sym(10, 2) =  l/I(1); % Roll torque due to u1
+B_sym(10, 4) = -l/I(1); % Roll torque due to u3
 
 % Pitch torque (depends on differential thrust between rotors 1 & 4 and 2 & 3)
-B_sym(11, 2) =  l/I(2); % Pitch torque due to u2
-B_sym(11, 4) = -l/I(2); % Pitch torque due to u4
+B_sym(11, 1) =  -l/I(2); % Pitch torque due to u2
+B_sym(11, 3) = l/I(2); % Pitch torque due to u4
 
 % Yaw torque (depends on torque induced by each rotor)
 % Assuming a proportionality factor 'sigma' relating thrust to torque
@@ -87,16 +87,9 @@ B_sym(12, 3) =  sigma/I(3); % Yaw torque due to u3
 B_sym(12, 4) = -sigma/I(3); % Yaw torque due to u4
 
 
-%Print1 = [z_sym; u_sym; p_sym;r_sym;n_sym] 
-%print2 = [x0;u0;p';r;n]
-
-
 % Substitute in the hover condition and parameter values
 A_hover = subs(A_sym, [z_sym; u_sym; p_sym; r_sym; n_sym], [x0; u0; p'; r; n]);
 B_hover = subs(B_sym, [sigma, m, l, I(1), I(2), I(3)], [0.01, 0.5, 0.2, 1.24, 1.24, 2.48]);
-
-%B_hover = subs(B_sym, [sigma; m], [0.01;0.5])
-
 
 
 % Debug: Check if substitution is successful and complete
@@ -110,35 +103,29 @@ disp(B_hover);
 A_hover_numeric = double(A_hover);
 B_hover_numeric = double(B_hover);
 
-
-% Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
-% You can adjust these weights to tune the controller
-position_weight = 10;
-velocity_weight = 1;
-orientation_weight = 1;
-angular_velocity_weight = 1;
+position_weight = [5,5,5];
+orientation_weight = [1000,1000,1];
+velocity_weight = [10,10,10];
+angular_velocity_weight = [100,100,1];
+
+% Integral weight
+Ki = 1;
 
 % Define weights for control inputs
-control_input_weight = 5; % You can adjust this to tune the input cost
+control_input_weight = 1; % You can adjust this to tune the input cost
 
 % Define the state cost matrix Q
-Q = diag([position_weight * ones(1,3), ...      % Position weights (x, y, z)
-          velocity_weight * ones(1,3), ...      % Velocity weights (xdot, ydot, zdot)
-          orientation_weight * ones(1,3), ...   % Orientation weights (phi, theta, psi)
-          angular_velocity_weight * ones(1,3)]); % Angular velocity weights (phidot, thetadot, psidot)
+Q = diag([position_weight,...        % Position weights (x, y, z)
+          orientation_weight,...     % Orientation weights (phi, theta, psi) 
+          velocity_weight,...        % Velocity weights (xdot, ydot, zdot)
+          angular_velocity_weight]); % Angular velocity weights (phidot, thetadot, psidot)
 
 % Define the control input cost matrix R
 R = control_input_weight * eye(4); % Assuming 4 control inputs
 
 % Implement LQR controller
 K = lqr(A_hover_numeric, B_hover_numeric, Q, R);
-
-
-%Q = eye(12); % State cost
-%R = eye(4);  % Input cost
-%K = lqr(A_hover_numeric, B_hover_numeric, Q, R); % LQR gain
-
 
 
 %% Main Simulation Loop
@@ -152,17 +139,28 @@ dt = t(2) - t(1); % Time step based on the time vector
 intruder_direction = [1; 1; 0]; % Initial direction for the intruder
 change_direction_interval = 100; % Change direction every 50 iterations
 
+
+% Integral controller
+integral_error = 0;
+
 for k = 1:length(t)-1
     % Define desired state (example: hover at a height of 5 meters)
     position = intruder_pos;
-    hover = [0; 0; 10];
+    hover = [7.5; 7.5; 10];
     z_desired = [hover; zeros(9,1)]; % [position; orientation; linear velocity; angular velocity]
 
      % Calculate error between current state and desired state
     error = quadrotor_state - z_desired;
 
+    % Update integral error
+    integral_error = integral_error + error*dt;
+
+
     % Calculate control input using LQR (u = -K*error)
-    u = -K * error;
+    u = -K * error; %- Ki.*integral_error;
+
+    
+    recordError(:,k) = error;
     
     % Ensure quadrotor_state is a column vector
     current_state = quadrotor_state;
@@ -196,6 +194,10 @@ for k = 1:length(t)-1
     % Pause for real-time visualization
     %pause(0.01);
 end
+
+%%Added by arturo
+recordError(:,1000) = error;
+
 
 %% Plotting the results
 for i = 1:4
@@ -302,3 +304,7 @@ for k=1:length(t)
     pause(t(k)-toc);
     pause(0.01);
 end
+
+
+figure
+plot(t', recordError(1,:)', 'g', t', recordError(2,:)', 'b--', t', recordError(3,:)', 'r');
