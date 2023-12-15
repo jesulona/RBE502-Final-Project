@@ -95,23 +95,14 @@ disp(B_hover);
 A_hover_numeric = double(A_hover);
 B_hover_numeric = double(B_hover);
 
-
-% Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
-% You can adjust these weights to tune the controller
-% position_weight = [10, 10, 5];
-% velocity_weight = [25, 25, 10];
-% orientation_weight = 1;
-% angular_velocity_weight = 1;
-
-% Define weights for different state variables
-position_weight = [5,5,15];
+position_weight = [5,5,150];
 orientation_weight = [1000,1000,1];
-velocity_weight = [10,10,10];
+velocity_weight = [7,7,20];
 angular_velocity_weight = [100,100,1];
 
 % Define weights for control inputs
-control_input_weight = 1; % You can adjust this to tune the input cost
+control_input_weight = 0.9; % You can adjust this to tune the input cost
 
 % Define the state cost matrix Q
 Q = diag([position_weight,...        % Position weights (x, y, z)
@@ -122,8 +113,29 @@ Q = diag([position_weight,...        % Position weights (x, y, z)
 % Define the control input cost matrix R
 R = control_input_weight * eye(4); % Assuming 4 control inputs
 
+% Define LQR gains for pre-hit and post-hit
+% Define weights for different state variables
+position_weight_2 = [20,20,5];
+orientation_weight_2 = [1000,1000,1];
+velocity_weight_2 = [50,50,30];
+angular_velocity_weight_2 = [100,100,1];
+
+% Define weights for control inputs
+control_input_weight_2 = 4; % You can adjust this to tune the input cost
+
+% Define the control input cost matrix R
+R_2 = control_input_weight_2 * eye(4); % Assuming 4 control inputs
+
+% Define the state cost matrix Q
+Q_2 = diag([position_weight_2,...        % Position weights (x, y, z)
+          orientation_weight_2,...     % Orientation weights (phi, theta, psi) 
+          velocity_weight_2,...        % Velocity weights (xdot, ydot, zdot)
+          angular_velocity_weight_2]); % Angular velocity weights (phidot, thetadot, psidot)
+
 % Implement LQR controller
-K = lqr(A_hover_numeric, B_hover_numeric, Q, R)
+K_pre_hit = lqr(A_hover_numeric, B_hover_numeric, Q, R)
+K_post_hit = lqr(A_hover_numeric, B_hover_numeric, Q_2, R_2)
+
 
 %Q = eye(12); % State cost
 %R = eye(4);  % Input cost
@@ -135,104 +147,76 @@ K = lqr(A_hover_numeric, B_hover_numeric, Q, R)
 global quadrotor_state
 global quadrotor_state_next
 quadrotor_state = z0; % Initialize state vector for quadrotor
-u = u0
+u = u0; % Initial control inputs
 path = [z0'];
 intruder_path = [intruder_pos'];
 dt = t(2) - t(1); % Time step based on the time vector
 
-intruder_direction = [-1; 1; 0]; % Initial direction for the intruder
-change_direction_interval = 500; % Change direction every 50 iterations
+intruder_direction = [1; 1; 0]; % Initial direction for the intruder
+change_direction_interval = 50;
 
 % Define a flag to track if a hit has occurred
 hit_flag = false;
 
 % Define the radius of the circle for hit detection
-hit_radius = 0.3; % Assuming the circle radius is 0.3*l
-
-integral = zeros(12,1);
-ki = zeros(4,12);
-% ki(1:4, 1:3) = zeros(4,3) + 0.007;
-%ki_v = 0.006;
-ki_v = 0.008;
-
-
-ki(1:4, 3) = [ki_v;ki_v;ki_v;ki_v]
-
+hit_radius = 0.3; % Assuming the circle radius is 2.0 units
 
 for k = 1:length(t)-1
-    % Retrieve
-    if ~hit_flag
-        distance_to_intruder = norm(quadrotor_state(1:3) - intruder_pos)
-        if distance_to_intruder <= hit_radius
-            disp("hit")
-            hit_flag = true; % Set flag to true
-            % Change intruder plot color to green
-            %set(intruder_plot, 'MarkerFaceColor', 'g');
-            % Stop the intruder's movement
-            intruder_speed = 0;
-            % Change desired position to home
-            z_desired = [0; 0; 0; zeros(9,1)];
-        
-        else
-            z_desired = [intruder_pos; zeros(9,1)];
-%             z_desired = [[0;0;10]; zeros(9,1)];
-        end
-
-    % Return
-    else
-        disp("else hit")
-        intruder_pos = quadrotor_state(1:3);
-        % Define desired state based on intruder position
+    % Check for hit
+    distance_to_intruder = norm(quadrotor_state(1:3) - intruder_pos);
+    if distance_to_intruder <= hit_radius && ~hit_flag
+        disp("hit");
+        hit_flag = true; % Set flag to true
+        intruder_speed = 0; % Stop the intruder's movement
     end
 
-%     A_hover = subs(A_sym, [z_sym; u_sym; p_sym; r_sym; n_sym], [quadrotor_state; u; p'; r; n]);
-%     B_hover = subs(B_sym, [sigma, m, l, I(1), I(2), I(3)], [0.01, 0.5, 0.2, 1.24, 1.24, 2.48]);
-%     A_hover_numeric = double(A_hover);
-%     B_hover_numeric = double(B_hover);
-%     K = lqr(A_hover_numeric, B_hover_numeric, Q, R);
+    % Define desired state based on whether hit has occurred
+    if ~hit_flag
+        z_desired = [intruder_pos; zeros(9,1)]; % Chase the intruder
+    else
+        z_desired = [0; 0; 0; zeros(9,1)]; % Go home after hit
+        intruder_pos = quadrotor_state(1:3); % Intruder follows quadrotor
+    end
 
     % Calculate error between current state and desired state
-    error = quadrotor_state - z_desired
+    error = quadrotor_state - z_desired;
 
-    % Calculate control input using LQR (u = -K*error)
-    u = -K * error + -ki * integral;
-    
-    integral = integral + error;
+    % Apply appropriate LQR control
+    if ~hit_flag
+        u = -K_pre_hit * error; % LQR control before hit
+    else
+        u = -K_post_hit * error; % LQR control after hit
+    end
+
+    % Handle ground contact
+    if quadrotor_state(3) <= 0 && hit_flag % If z position is at or below ground level
+        u = zeros(size(u)); % Set control input to zero
+        quadrotor_state(7:9) = 0; % Set velocity to zero
+    end
 
     % Ensure quadrotor_state is a column vector
     current_state = quadrotor_state;
 
-
     % Directly call quadrotor function to get the derivative
     dz = quadrotor(t(k), current_state, u, p, r, n);
-
+    
     change = dz*dt;
 
     % Explicit Euler method to update the state
     quadrotor_state_next = current_state + change;
 
-   % Update the state for the next iteration
+    % Update the state for the next iteration
     quadrotor_state = quadrotor_state_next;
-
-%     A_hover = subs(A_sym, [z_sym; u_sym; p_sym; r_sym; n_sym], [quadrotor_state; u; p'; r; n]);
-%     A_hover_numeric = double(A_hover);
 
     path = [path; quadrotor_state'];
 
-     % Change the direction of the intruder every fixed number of iterations
-    if mod(k, change_direction_interval) == 0
+    % Intruder movement logic
+    if mod(k, change_direction_interval) == 0 && ~hit_flag
         intruder_direction = [2*rand(2, 1) - 1; 0]; % Change in X and Y, not Z
-        intruder_direction = intruder_direction / norm(intruder_direction); % Normalize direction
     end
-
-    % Move the intruder in the current direction
     intruder_pos = intruder_pos + intruder_direction * intruder_speed * dt;
     intruder_pos = max(min(intruder_pos, 10), -10); % Keep within bounds
-
     intruder_path = [intruder_path; intruder_pos'];
-
-    % Pause for real-time visualization
-    %pause(0.01);
 end
 
 %% Plotting the results
