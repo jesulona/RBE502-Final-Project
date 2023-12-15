@@ -23,7 +23,7 @@ n = [0; 0; 0];
 % Intruder initialization
 intruder_pos = [3; -7; 5]; % Initial position of the intruder
 intruder_start = intruder_pos;
-intruder_speed = 0.1; % Adjust this value for the intruder's speed
+intruder_speed = 0.5; % Adjust this value for the intruder's speed
 
 % Time vector
 t = linspace(0, 10, 1000);
@@ -62,35 +62,7 @@ dz_sym = quadrotor(0, z_sym, u_sym, p_sym, r_sym, n_sym);
 
 % Compute the Jacobians
 A_sym = jacobian(dz_sym, z_sym);
-%B_sym = jacobian(dz_sym, u_sym)
-% 
-% % Assume each control input ui contributes to the total thrust and torques
-% % Total thrust (collective thrust from all rotors)
-% B_sym(9, 1) = 1/m;   % Thrust from u1 affects z acceleration
-% B_sym(9, 2) = 1/m;   % Thrust from u2
-% B_sym(9, 3) = 1/m;   % Thrust from u3
-% B_sym(9, 4) = 1/m;   % Thrust from u4
-% 
-% % Torques due to differential thrusts
-% % Roll torque (depends on differential thrust between rotors 1 & 3 and 2 & 4)
-% B_sym(10, 1) =  l/I(1); % Roll torque due to u1
-% B_sym(10, 3) = -l/I(1); % Roll torque due to u3
-% 
-% % Pitch torque (depends on differential thrust between rotors 1 & 4 and 2 & 3)
-% B_sym(11, 2) =  l/I(2); % Pitch torque due to u2
-% B_sym(11, 4) = -l/I(2); % Pitch torque due to u4
-% 
-% % Yaw torque (depends on torque induced by each rotor)
-% % Assuming a proportionality factor 'sigma' relating thrust to torque
-% B_sym(12, 1) =  sigma/I(3); % Yaw torque due to u1
-% B_sym(12, 2) = -sigma/I(3); % Yaw torque due to u2
-% B_sym(12, 3) =  sigma/I(3); % Yaw torque due to u3
-% B_sym(12, 4) = -sigma/I(3); % Yaw torque due to u4
-% 
-% 
-% %Print1 = [z_sym; u_sym; p_sym;r_sym;n_sym] 
-% %print2 = [x0;u0;p';r;n]
-% 
+
 B_sym = zeros(12,4);
 
 % Thrust Contribution
@@ -125,13 +97,13 @@ B_hover_numeric = double(B_hover);
 % Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
 % You can adjust these weights to tune the controller
-position_weight = 15;
+position_weight = 60;
 velocity_weight = 10;
-orientation_weight = 5;
-angular_velocity_weight = 1;
+orientation_weight = 30;
+angular_velocity_weight = 10;
 
 % Define weights for control inputs
-control_input_weight = 6; % You can adjust this to tune the input cost
+control_input_weight = 20; % You can adjust this to tune the input cost
 
 % Define the state cost matrix Q
 Q = diag([position_weight * ones(1,3), ...      % Position weights (x, y, z)
@@ -149,6 +121,25 @@ K = lqr(A_hover_numeric, B_hover_numeric, Q, R);
 %Q = eye(12); % State cost
 %R = eye(4);  % Input cost
 %K = lqr(A_hover_numeric, B_hover_numeric, Q, R); % LQR gain
+% Assuming A_hover and B_hover are your original matrices
+% Augment A and B for the integral action
+
+A_augmented = [A_hover, zeros(12, 3); 
+               % Integral error dynamics
+               eye(3), zeros(3, 3)];  
+
+B_augmented = [B_hover; 
+               zeros(3, size(B_hover, 2))];
+
+% Choose weights for integral error
+integral_error_weight = 10; % Choose a suitable value
+
+% Augment Q matrix
+Q_augmented = blkdiag(Q, integral_error_weight * eye(3));
+
+% LQRI gain calculation
+K_augmented = lqr(A_augmented, B_augmented, Q_augmented, R);
+
 
 
 
@@ -167,7 +158,7 @@ change_direction_interval = 500; % Change direction every 50 iterations
 hit_flag = false;
 
 % Define the radius of the circle for hit detection
-hit_radius = 2.0; % Assuming the circle radius is 0.3*l
+hit_radius = 3; % Assuming the circle radius is 0.3*l
 
 for k = 1:length(t)-1
     % Retrieve
@@ -190,7 +181,7 @@ for k = 1:length(t)-1
 
     % Return
     else
-        disp("else hit")
+        %disp("else hit")
         intruder_pos = quadrotor_state(1:3);
         % Define desired state based on intruder position
     end
@@ -198,8 +189,17 @@ for k = 1:length(t)-1
     % Calculate error between current state and desired state
     error = quadrotor_state - z_desired;
 
+    % Update integral error
+    integral_error = integral_error + (z_desired(1:3) - quadrotor_state(1:3)) * dt;
+
+    % Update augmented state
+    augmented_state = [quadrotor_state; integral_error];
+
+    % Calculate control input using LQRI
+    u = -K_augmented * augmented_state;
+
     % Calculate control input using LQR (u = -K*error)
-    u = -K * error;
+    %u = -K * error;
     
     % Ensure quadrotor_state is a column vector
     current_state = quadrotor_state;
