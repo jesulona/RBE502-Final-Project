@@ -272,7 +272,6 @@ for k = 1:length(t)-1
     % Explicit Euler method to update the state
     quadrotor_state_next = current_state + change;
 
-   % Update the state for the next iteration
     % Update the state for the next iteration
     quadrotor_state = quadrotor_state_next;
 <<<<<<< Updated upstream
