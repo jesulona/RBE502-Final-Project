@@ -99,19 +99,25 @@ B_hover_numeric = double(B_hover);
 % Implement LQR/PID controller (example: LQR)
 % Define weights for different state variables
 % You can adjust these weights to tune the controller
-position_weight = 22;
-velocity_weight = 15;
-orientation_weight = 1;
-angular_velocity_weight = 1;
+% position_weight = [10, 10, 5];
+% velocity_weight = [25, 25, 10];
+% orientation_weight = 1;
+% angular_velocity_weight = 1;
+
+% Define weights for different state variables
+position_weight = [5,5,5];
+orientation_weight = [1000,1000,1];
+velocity_weight = [10,10,10];
+angular_velocity_weight = [100,100,1];
 
 % Define weights for control inputs
-control_input_weight = 10; % You can adjust this to tune the input cost
+control_input_weight = 1; % You can adjust this to tune the input cost
 
 % Define the state cost matrix Q
-Q = diag([position_weight * ones(1,3), ...      % Position weights (x, y, z)
-          velocity_weight * ones(1,3), ...      % Velocity weights (xdot, ydot, zdot)
-          orientation_weight * ones(1,3), ...   % Orientation weights (phi, theta, psi)
-          angular_velocity_weight * ones(1,3)]); % Angular velocity weights (phidot, thetadot, psidot)
+Q = diag([position_weight,...        % Position weights (x, y, z)
+          orientation_weight,...     % Orientation weights (phi, theta, psi) 
+          velocity_weight,...        % Velocity weights (xdot, ydot, zdot)
+          angular_velocity_weight]); % Angular velocity weights (phidot, thetadot, psidot)
 
 % Define the control input cost matrix R
 R = control_input_weight * eye(4); % Assuming 4 control inputs
